@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Contribution Visualizer</title>
+        <!-- Tailwind CSS for styling the UI overlays -->
+        <script src="https://cdn.tailwindcss.com"></script>
+        <!-- ✨ GSAP is still needed for the high-quality bounce animation -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+        <!-- Three.js Import Map -->
+        <script type="importmap">
+            {
+                "imports": {
+                    "three": "https://unpkg.com/three@0.157.0/build/three.module.js",
+                    "three/addons/": "https://unpkg.com/three@0.157.0/examples/jsm/"
+                }
+            }
+        </script>
+        <style>
+            body {
+                margin: 0;
+                overflow: hidden;
+                /* ✨ Rolled back to the original light gray background */
+                background-color: #f8fafc;
+            }
+            canvas {
+                display: block;
+                position: fixed;
+                top: 0;
+                left: 0;
+                z-index: -1;
+            }
+            #tooltip {
+                pointer-events: none;
+                transition: opacity 0.2s;
+            }
+        </style>
+    </head>
+    <body>
+        <!-- UI Overlays (Unchanged) -->
+        <div id="ui-top-left" class="absolute top-0 left-0 p-4 md:p-6">
+            <div
+                class="flex items-center space-x-2 bg-white/80 backdrop-blur-sm p-2 rounded-lg shadow-md border border-slate-200"
+            >
+                <input
+                    type="text"
+                    id="usernameInput"
+                    placeholder="Enter GitHub username"
+                    class="bg-transparent focus:outline-none px-2 text-slate-700 placeholder:text-slate-400"
+                />
+                <button
+                    id="searchButton"
+                    class="bg-slate-800 hover:bg-slate-700 text-white font-semibold py-2 px-4 rounded-md transition-colors duration-200"
+                >
+                    Search
+                </button>
+                <div class="border-l border-slate-300 ml-2 pl-4">
+                    <div class="relative">
+                        <select
+                            id="styleSelector"
+                            class="bg-transparent focus:outline-none text-slate-700 font-medium rounded-md appearance-none py-1 pl-2 pr-8 cursor-pointer"
+                        >
+                            <option value="clay">Clay</option>
+                            <option value="jelly">Jelly</option>
+                        </select>
+                        <div
+                            class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2"
+                        >
+                            <svg
+                                class="h-5 w-5 text-gray-500"
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 20 20"
+                            >
+                                <path
+                                    stroke="currentColor"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="1.5"
+                                    d="M6 8l4 4 4-4"
+                                />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="ui-bottom-right" class="absolute bottom-0 right-0 p-4 md:p-6">
+            <div
+                class="flex items-center space-x-3 bg-white/80 backdrop-blur-sm p-2 rounded-lg shadow-md border border-slate-200"
+            >
+                <span class="text-sm text-slate-600 font-medium pl-2"
+                    >Embed Link</span
+                >
+                <button
+                    id="copyLinkButton"
+                    class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-2 px-3 rounded-md transition-colors duration-200"
+                >
+                    Copy
+                </button>
+            </div>
+        </div>
+        <div
+            id="tooltip"
+            class="absolute hidden bg-slate-900 text-white text-sm rounded-md px-3 py-1.5 shadow-lg"
+        ></div>
+
+        <script type="module">
+            import * as THREE from "three";
+            import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+            // ✨ Removed imports for photorealism effects (RGBELoader, EffectComposer, etc.)
+
+            import {
+                fetchContributions,
+                generateFakeData,
+            } from "./github_api.js";
+
+            // --- DOM Elements & State ---
+            const usernameInput = document.getElementById("usernameInput");
+            const searchButton = document.getElementById("searchButton");
+            const copyLinkButton = document.getElementById("copyLinkButton");
+            const styleSelector = document.getElementById("styleSelector");
+            const tooltip = document.getElementById("tooltip");
+
+            let currentStyle = "clay";
+
+            // --- Scene Setup ---
+            const renderer = new THREE.WebGLRenderer({
+                antialias: true,
+                alpha: true,
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            // ✨ Removed shadowMap and toneMapping properties for the original look
+            document.body.appendChild(renderer.domElement);
+
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(
+                45,
+                window.innerWidth / window.innerHeight,
+                0.1,
+                1000,
+            );
+            // ✨ Restored original camera position
+            camera.position.set(0, 35, 35);
+
+            const controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.target.set(0, 0, 0);
+            controls.minDistance = 20;
+            controls.maxDistance = 80;
+            controls.maxPolarAngle = Math.PI / 2.1;
+
+            // ✨ Restored original, simple lighting setup
+            scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 20, 15);
+            scene.add(directionalLight);
+
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2();
+            let hoveredVoxel = null;
+
+            // --- Grid Logic ---
+            const DAYS = 7;
+            const WEEKS = 53;
+            const mainGroup = new THREE.Group();
+            scene.add(mainGroup);
+
+            let voxelGroup = new THREE.Group();
+            mainGroup.add(voxelGroup);
+
+            const colorEmpty = new THREE.Color("#ebedf0");
+            const colorLow = new THREE.Color("#9be9a8");
+            const colorHigh = new THREE.Color("#216e39");
+
+            function updateVoxelMaterials() {
+                voxelGroup.children.forEach((voxel) => {
+                    const material = voxel.material;
+                    if (currentStyle === "clay") {
+                        material.roughness = 0.8;
+                        material.metalness = 0.1;
+                        material.transmission = 0;
+                        material.transparent = false;
+                        material.opacity = 1.0;
+                    } else {
+                        // jelly
+                        material.roughness = 0.1;
+                        material.metalness = 0.2;
+                        material.transmission = 0.95;
+                        material.thickness = 1.5;
+                        material.transparent = true;
+                        material.opacity = 0.85;
+                    }
+                    material.needsUpdate = true;
+                });
+            }
+
+            function createGrid(contributionData) {
+                voxelGroup.clear();
+
+                const VoxelSize = 1;
+                const Spacing = 1.2;
+                const MaxHeight = 8; // Restored original max height
+
+                const maxContributions = Math.max(
+                    1,
+                    ...contributionData.map((d) => d.count),
+                );
+
+                for (let week = 0; week < WEEKS; week++) {
+                    for (let day = 0; day < DAYS; day++) {
+                        const index = week * DAYS + day;
+                        const contribution = contributionData[index];
+                        if (!contribution) continue;
+
+                        const normalizedCount =
+                            contribution.count / maxContributions;
+                        const height =
+                            contribution.count > 0
+                                ? 0.1 + normalizedCount * MaxHeight
+                                : 0.01;
+                        const geometry = new THREE.BoxGeometry(
+                            VoxelSize,
+                            height,
+                            VoxelSize,
+                        );
+
+                        // This is a key fix from the last round: moving the origin
+                        // to the base of the object. We'll keep this.
+                        geometry.translate(0, height / 2, 0);
+
+                        const material = new THREE.MeshPhysicalMaterial({
+                            emissive: new THREE.Color(0x000000),
+                        });
+
+                        if (contribution.count === 0) {
+                            material.color.set(colorEmpty);
+                        } else {
+                            material.color.lerpColors(
+                                colorLow,
+                                colorHigh,
+                                normalizedCount,
+                            );
+                        }
+
+                        const voxel = new THREE.Mesh(geometry, material);
+                        const x = (week - (WEEKS - 1) / 2) * Spacing;
+                        const z = (day - (DAYS - 1) / 2) * Spacing;
+
+                        voxel.position.set(x, 0, z);
+                        // ✨ Removed shadow casting properties
+
+                        voxel.userData = {
+                            count: contribution.count,
+                            date: contribution.date,
+                        };
+                        voxelGroup.add(voxel);
+                    }
+                }
+                updateVoxelMaterials();
+            }
+
+            // ✨ Restored the original white ground plane
+            const planeGeometry = new THREE.PlaneGeometry(
+                WEEKS * 1.2 + 4,
+                DAYS * 1.2 + 4,
+            );
+            const planeMaterial = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                roughness: 0.9,
+            });
+            const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+            plane.rotation.x = -Math.PI / 2;
+            mainGroup.add(plane);
+
+            // --- Event Listeners ---
+            // The search, keydown, style, and copy listeners are all fine from before.
+            async function handleSearch() {
+                const username = usernameInput.value.trim();
+                if (!username) {
+                    alert("Please enter a GitHub username.");
+                    return;
+                }
+                searchButton.disabled = true;
+                searchButton.textContent = "...";
+                try {
+                    const data = await fetchContributions(username);
+                    createGrid(data);
+                } catch (error) {
+                    alert(error.message);
+                } finally {
+                    searchButton.disabled = false;
+                    searchButton.textContent = "Search";
+                }
+            }
+            searchButton.addEventListener("click", handleSearch);
+            usernameInput.addEventListener("keydown", (event) => {
+                if (event.key === "Enter") handleSearch();
+            });
+            styleSelector.addEventListener("change", (event) => {
+                currentStyle = event.target.value;
+                updateVoxelMaterials();
+            });
+            copyLinkButton.addEventListener("click", () => {
+                const username = usernameInput.value.trim();
+                if (!username) {
+                    copyLinkButton.textContent = "Enter user!";
+                    setTimeout(() => {
+                        copyLinkButton.textContent = "Copy";
+                    }, 2000);
+                    return;
+                }
+                const style = styleSelector.value;
+                const baseUrl =
+                    window.location.origin +
+                    window.location.pathname.replace(
+                        "visualizer.html",
+                        "index.html",
+                    );
+                const embedSrc = `${baseUrl.replace("index.html", "visualizer.html")}?username=${encodeURIComponent(username)}&style=${style}`;
+                const embedCode = `<iframe src="${embedSrc}" width="100%" height="450" title="3D Contribution Visualizer" style="border:none; border-radius: 8px;"></iframe>`;
+                navigator.clipboard.writeText(embedCode).then(() => {
+                    copyLinkButton.textContent = "Copied!";
+                    setTimeout(() => {
+                        copyLinkButton.textContent = "Copy";
+                    }, 2000);
+                });
+            });
+
+            window.addEventListener("resize", () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                // ✨ Removed composer resize logic
+            });
+
+            window.addEventListener("mousemove", (event) => {
+                mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(
+                    voxelGroup.children,
+                );
+
+                if (intersects.length > 0) {
+                    const newHovered = intersects[0].object;
+                    if (hoveredVoxel !== newHovered) {
+                        if (hoveredVoxel) {
+                            // Using a subtle GSAP tween for the hover is a nice touch, let's keep it.
+                            gsap.to(hoveredVoxel.material.emissive, {
+                                r: 0,
+                                g: 0,
+                                b: 0,
+                                duration: 0.3,
+                            });
+                        }
+                        hoveredVoxel = newHovered;
+                        gsap.to(hoveredVoxel.material.emissive, {
+                            r: 0.3,
+                            g: 0.3,
+                            b: 0.3,
+                            duration: 0.3,
+                        });
+                        const { count, date } = hoveredVoxel.userData;
+                        tooltip.innerHTML = `<strong>${count} contributions</strong> on ${date}`;
+                        tooltip.classList.remove("hidden");
+                    }
+                    tooltip.style.left = `${event.clientX + 10}px`;
+                    tooltip.style.top = `${event.clientY + 10}px`;
+                } else {
+                    if (hoveredVoxel) {
+                        gsap.to(hoveredVoxel.material.emissive, {
+                            r: 0,
+                            g: 0,
+                            b: 0,
+                            duration: 0.3,
+                        });
+                    }
+                    hoveredVoxel = null;
+                    tooltip.classList.add("hidden");
+                }
+            });
+
+            // ✨ MODIFICATION A: New "Launch & Bounce" animation using a GSAP Timeline
+            function triggerVoxelAnimation(voxel) {
+                // Prevent re-animating a voxel that is already moving
+                if (gsap.isTweening(voxel.position)) {
+                    return;
+                }
+
+                const jumpHeight = 5; // How high the block should jump
+                const launchDuration = 0.3; // How long the jump up takes
+                const fallDuration = 1.2; // How long the fall and bounce takes
+
+                // A GSAP timeline lets us sequence animations one after another.
+                const tl = gsap.timeline();
+
+                // 1. First, animate the block launching upwards.
+                tl.to(voxel.position, {
+                    y: jumpHeight,
+                    duration: launchDuration,
+                    ease: "power2.out", // An ease that starts fast and slows down at the peak
+                });
+
+                // 2. Then, chain the animation to fall back down with a bounce.
+                tl.to(voxel.position, {
+                    y: 0, // Animate back to the ground (its original position)
+                    duration: fallDuration,
+                    ease: "bounce.out", // The bounce effect on landing
+                });
+            }
+
+            window.addEventListener(
+                "click",
+                (event) => {
+                    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+                    raycaster.setFromCamera(mouse, camera);
+                    const intersects = raycaster.intersectObjects(
+                        voxelGroup.children,
+                    );
+                    if (intersects.length > 0) {
+                        const clickedVoxel = intersects[0].object;
+                        if (clickedVoxel.userData.count > 0) {
+                            triggerVoxelAnimation(clickedVoxel);
+                        }
+                    }
+                },
+                false,
+            );
+
+            // --- Initial Load & Animation ---
+            function initialLoad() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const usernameFromUrl = urlParams.get("username");
+                const styleFromUrl = urlParams.get("style");
+                if (styleFromUrl && ["clay", "jelly"].includes(styleFromUrl)) {
+                    styleSelector.value = styleFromUrl;
+                    currentStyle = styleFromUrl;
+                }
+                if (usernameFromUrl) {
+                    usernameInput.value = usernameFromUrl;
+                    handleSearch();
+                } else {
+                    const initialData = generateFakeData();
+                    createGrid(initialData);
+                }
+            }
+
+            const animate = () => {
+                requestAnimationFrame(animate);
+
+                if (!controls.autoRotate) {
+                    // Restored original rotation speed
+                    mainGroup.rotation.y += 0.0005;
+                }
+                controls.update();
+
+                // ✨ The render call is now simple again, without the post-processing composer.
+                renderer.render(scene, camera);
+            };
+
+            initialLoad();
+            animate();
+        </script>
+    </body>
+</html>
