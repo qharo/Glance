@@ -1,4 +1,4 @@
-// github_api.js
+// src/api.js
 
 const WEEKS = 53;
 const DAYS_IN_WEEK = 7;
