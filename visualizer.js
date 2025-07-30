@@ -34,7 +34,6 @@ let hoveredVoxel = null;
 
 // --- DOM & Scene Elements ---
 const ui = getDOMElements();
-// --- FIX --- Capture backgroundPlane from initScene's return value
 const { scene, camera, renderer, lights, backgroundPlane } = initScene(
   document.body,
 );
@@ -47,7 +46,6 @@ const { scene, camera, renderer, lights, backgroundPlane } = initScene(
  */
 function applyTheme(theme) {
   currentTheme = theme;
-  // --- FIX --- Pass the backgroundPlane object to setTheme
   setTheme(theme, ui, lights, backgroundPlane);
 }
 
@@ -74,7 +72,8 @@ async function handleSearch() {
     alert("Please enter a GitHub username.");
     return;
   }
-  setLoading(true, ui.searchButton);
+  // CHANGE A & B: Pass the whole `ui` object to the updated setLoading function
+  setLoading(true, ui);
   hideYearSelector(ui.yearSelectorWrapper);
 
   try {
@@ -93,7 +92,8 @@ async function handleSearch() {
     createGrid(generateFakeData());
     updateVoxelMaterials(voxelGroup, currentStyle);
   } finally {
-    setLoading(false, ui.searchButton);
+    // CHANGE A & B: Pass the whole `ui` object to the updated setLoading function
+    setLoading(false, ui);
   }
 }
 
