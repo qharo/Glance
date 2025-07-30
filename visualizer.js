@@ -24,12 +24,12 @@ import {
   showYearSelector,
   hideYearSelector,
 } from "./src/ui.js";
-import { updateVoxelMaterials } from "./src/styles/index.js";
+import { getStyle } from "./src/styles/index.js";
 
 // --- State ---
 let currentStyle = "clay";
 let currentTheme = "light";
-let allUserContributions = null; // Full API response for a user
+let allUserContributions = null;
 let hoveredVoxel = null;
 
 // --- DOM & Scene Elements ---
@@ -40,39 +40,26 @@ const { scene, camera, renderer, lights, backgroundPlane } = initScene(
 
 // --- Core Logic ---
 
-/**
- * Sets the application's theme and updates all relevant components.
- * @param {string} theme - 'light' or 'dark'
- */
 function applyTheme(theme) {
   currentTheme = theme;
   setTheme(theme, ui, lights, backgroundPlane);
 }
 
-/**
- * Displays contributions for a specific year.
- * @param {string} year - The year to display.
- */
 function displayYear(year) {
   if (!allUserContributions) return;
   const yearContributions = allUserContributions.contributions.filter((c) =>
     c.date.startsWith(year),
   );
   const paddedData = padYearData(yearContributions, year);
-  createGrid(paddedData);
-  updateVoxelMaterials(voxelGroup, currentStyle);
+  createGrid(paddedData, currentStyle);
 }
 
-/**
- * Fetches user data, populates the grid, and updates the UI.
- */
 async function handleSearch() {
   const username = ui.usernameInput.value.trim();
   if (!username) {
     alert("Please enter a GitHub username.");
     return;
   }
-  // CHANGE A & B: Pass the whole `ui` object to the updated setLoading function
   setLoading(true, ui);
   hideYearSelector(ui.yearSelectorWrapper);
 
@@ -84,15 +71,13 @@ async function handleSearch() {
     populateYearSelector(ui.yearSelector, years);
     showYearSelector(ui.yearSelectorWrapper);
 
-    displayYear(years[0]); // Display the most recent year first
+    displayYear(years[0]);
   } catch (error) {
     alert(error.message);
     allUserContributions = null;
     hideYearSelector(ui.yearSelectorWrapper);
-    createGrid(generateFakeData());
-    updateVoxelMaterials(voxelGroup, currentStyle);
+    createGrid(generateFakeData(), currentStyle);
   } finally {
-    // CHANGE A & B: Pass the whole `ui` object to the updated setLoading function
     setLoading(false, ui);
   }
 }
@@ -108,36 +93,28 @@ function onMouseMove(event) {
   raycaster.setFromCamera(mouse, camera);
   const intersects = raycaster.intersectObjects(voxelGroup.children);
 
+  const style = getStyle(currentStyle);
+
   if (intersects.length > 0) {
     const newHovered = intersects[0].object;
     if (hoveredVoxel !== newHovered) {
-      if (hoveredVoxel) {
-        gsap.to(hoveredVoxel.material.emissive, {
-          r: 0,
-          g: 0,
-          b: 0,
-          duration: 0.3,
-        });
+      // End hover on the old voxel
+      if (hoveredVoxel && style.onHoverEnd) {
+        style.onHoverEnd(hoveredVoxel);
       }
       hoveredVoxel = newHovered;
-      gsap.to(hoveredVoxel.material.emissive, {
-        r: 0.3,
-        g: 0.3,
-        b: 0.3,
-        duration: 0.3,
-      });
+      // Start hover on the new voxel
+      if (style.onHoverStart) {
+        style.onHoverStart(hoveredVoxel);
+      }
     }
     const { count, date } = hoveredVoxel.userData;
     const text = `<strong>${count} contributions</strong> on ${date}`;
     updateTooltip(ui.tooltip, text, event.clientX, event.clientY);
   } else {
-    if (hoveredVoxel) {
-      gsap.to(hoveredVoxel.material.emissive, {
-        r: 0,
-        g: 0,
-        b: 0,
-        duration: 0.3,
-      });
+    // End hover if mouse leaves all voxels
+    if (hoveredVoxel && style.onHoverEnd) {
+      style.onHoverEnd(hoveredVoxel);
     }
     hoveredVoxel = null;
     hideTooltip(ui.tooltip);
@@ -155,9 +132,7 @@ function onWindowClick(event) {
 
   if (intersects.length > 0) {
     const clickedVoxel = intersects[0].object;
-    if (clickedVoxel.userData.count > 0) {
-      triggerVoxelAnimation(clickedVoxel);
-    }
+    triggerVoxelAnimation(clickedVoxel, currentStyle);
   }
 }
 
@@ -173,7 +148,11 @@ function setupEventListeners() {
 
   ui.styleSelector.addEventListener("change", (event) => {
     currentStyle = event.target.value;
-    updateVoxelMaterials(voxelGroup, currentStyle);
+    if (allUserContributions) {
+      displayYear(ui.yearSelector.value);
+    } else {
+      createGrid(generateFakeData(), currentStyle);
+    }
   });
 
   ui.copyLinkButton.addEventListener("click", () => {
@@ -244,7 +223,6 @@ function initialLoad() {
   const rotationParam = urlParams.get("rotation");
   const themeParam = urlParams.get("theme");
 
-  // Theme setup
   if (
     themeParam === "dark" ||
     (!themeParam && window.matchMedia?.("(prefers-color-scheme: dark)").matches)
@@ -254,26 +232,22 @@ function initialLoad() {
     applyTheme("light");
   }
 
-  // Controls setup
   if (rotationParam === "false") {
     getControls().autoRotate = false;
     ui.disableRotationCheckbox.checked = true;
   }
 
-  // Style setup
-  if (styleFromUrl && ["clay", "jelly"].includes(styleFromUrl)) {
+  if (styleFromUrl && ["clay", "jelly", "hologram"].includes(styleFromUrl)) {
     ui.styleSelector.value = styleFromUrl;
     currentStyle = styleFromUrl;
   }
 
-  // Data setup
   if (usernameFromUrl) {
     ui.usernameInput.value = usernameFromUrl;
     handleSearch();
   } else {
     const initialData = generateFakeData();
-    createGrid(initialData);
-    updateVoxelMaterials(voxelGroup, currentStyle);
+    createGrid(initialData, currentStyle);
   }
 }
 

@@ -2,20 +2,16 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { createBackgroundPlane } from "./backgrounds/index.js";
+import { getStyle } from "./styles/index.js";
 
 // Constants
 const DAYS = 7;
 const WEEKS = 53;
 
 // Scene objects
-let controls, raycaster;
+let controls, raycaster, clock;
 export const mainGroup = new THREE.Group();
 export const voxelGroup = new THREE.Group();
-
-// Colors
-const colorEmpty = new THREE.Color("#ebedf0");
-const colorLow = new THREE.Color("#9be9a8");
-const colorHigh = new THREE.Color("#216e39");
 
 /**
  * Initializes the entire Three.js scene.
@@ -47,6 +43,7 @@ export function initScene(container) {
   controls.autoRotateSpeed = 0.6;
 
   raycaster = new THREE.Raycaster();
+  clock = new THREE.Clock(); // For shader animations
 
   const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
   scene.add(hemisphereLight);
@@ -60,7 +57,6 @@ export function initScene(container) {
   scene.add(fillDirectionalLight);
 
   const backgroundPlane = createBackgroundPlane();
-  // The line `backgroundPlane.dataset.role = "background-plane";` was incorrect and has been removed.
   mainGroup.add(backgroundPlane);
 
   mainGroup.add(voxelGroup);
@@ -71,17 +67,18 @@ export function initScene(container) {
     camera,
     renderer,
     lights: { hemisphereLight, mainDirectionalLight, fillDirectionalLight },
-    backgroundPlane, // <-- FIX: Return the plane object
+    backgroundPlane,
   };
 }
 
 /**
- * Creates the grid of voxels based on contribution data.
+ * Creates the grid of voxels based on contribution data and a visual style.
  * @param {Array<object>} contributionData - The array of contribution objects.
+ * @param {string} styleName - The name of the style to use.
  */
-export function createGrid(contributionData) {
-  voxelGroup.clear();
-  const VoxelSize = 1;
+export function createGrid(contributionData, styleName) {
+  voxelGroup.clear(); // Clear existing voxels
+  const style = getStyle(styleName);
   const Spacing = 1.2;
   const MaxHeight = 8;
   const maxContributions = Math.max(1, ...contributionData.map((d) => d.count));
@@ -94,44 +91,40 @@ export function createGrid(contributionData) {
 
       const normalizedCount = contribution.count / maxContributions;
       const height =
-        contribution.count > 0 ? 0.1 + normalizedCount * MaxHeight : 0.01;
-      const geometry = new THREE.BoxGeometry(VoxelSize, height, VoxelSize);
+        contribution.count > 0 ? 0.1 + normalizedCount * MaxHeight : 0.05;
+
+      const dataPayload = { ...contribution, normalizedCount };
+
+      const geometry = style.getGeometry(height, dataPayload);
       geometry.translate(0, height / 2, 0);
 
-      const material = new THREE.MeshPhysicalMaterial({
-        emissive: new THREE.Color(0x000000),
-      });
-      if (contribution.count === 0) {
-        material.color.set(colorEmpty);
-      } else {
-        material.color.lerpColors(colorLow, colorHigh, normalizedCount);
-      }
+      const material = style.createMaterial(dataPayload);
       const voxel = new THREE.Mesh(geometry, material);
+
       const x = (week - (WEEKS - 1) / 2) * Spacing;
       const z = (day - (DAYS - 1) / 2) * Spacing;
       voxel.position.set(x, 0, z);
       voxel.userData = {
-        count: contribution.count,
-        date: contribution.date,
+        ...dataPayload,
+        // Add a flag to identify voxels that need time updates for shaders
+        needsTimeUpdate: !!style.needsTimeUpdate,
       };
       voxelGroup.add(voxel);
     }
   }
 }
 
-export function triggerVoxelAnimation(voxel) {
-  if (gsap.isTweening(voxel.position)) return;
-  const jumpHeight = 5,
-    launchDuration = 0.3,
-    fallDuration = 1.2;
-  gsap
-    .timeline()
-    .to(voxel.position, {
-      y: jumpHeight,
-      duration: launchDuration,
-      ease: "power2.out",
-    })
-    .to(voxel.position, { y: 0, duration: fallDuration, ease: "bounce.out" });
+/**
+ * Triggers a style-specific animation on a voxel.
+ * @param {THREE.Mesh} voxel - The voxel to animate.
+ * @param {string} styleName - The name of the current style.
+ */
+export function triggerVoxelAnimation(voxel, styleName) {
+  const style = getStyle(styleName);
+  const timeline = style.getAnimationTimeline(voxel);
+  if (timeline) {
+    timeline.play();
+  }
 }
 
 /**
@@ -139,6 +132,16 @@ export function triggerVoxelAnimation(voxel) {
  */
 export function animate(scene, camera, renderer) {
   requestAnimationFrame(() => animate(scene, camera, renderer));
+
+  const elapsedTime = clock.getElapsedTime();
+
+  // Update shaders that need a time uniform (like hologram)
+  for (const voxel of voxelGroup.children) {
+    if (voxel.userData.needsTimeUpdate && voxel.material.uniforms) {
+      voxel.material.uniforms.u_time.value = elapsedTime;
+    }
+  }
+
   controls.update();
   renderer.render(scene, camera);
 }

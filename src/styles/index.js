@@ -1,25 +1,24 @@
 // src/styles/index.js
-import { applyClayStyle } from "./clay.js";
-import { applyJellyStyle } from "./jelly.js";
+import { clayStyle } from "./clay.js";
+import { jellyStyle } from "./jelly.js";
+import { hologramStyle } from "./hologram.js";
 
 const styles = {
-  clay: applyClayStyle,
-  jelly: applyJellyStyle,
+  clay: clayStyle,
+  jelly: jellyStyle,
+  hologram: hologramStyle,
 };
 
 /**
- * Applies a named visual style to all voxels in a group.
- * @param {THREE.Group} voxelGroup - The group containing voxel meshes.
- * @param {string} styleName - The name of the style to apply ('clay' or 'jelly').
+ * Gets the full style definition object for a given style name.
+ * @param {string} styleName - The name of the style ('clay', 'jelly', or 'hologram').
+ * @returns {object} The style definition object.
  */
-export function updateVoxelMaterials(voxelGroup, styleName) {
-  const styleFn = styles[styleName];
-  if (!styleFn) {
-    console.warn(`Unknown style: ${styleName}`);
-    return;
+export function getStyle(styleName) {
+  const style = styles[styleName];
+  if (!style) {
+    console.warn(`Unknown style: ${styleName}, defaulting to clay.`);
+    return styles.clay;
   }
-
-  voxelGroup.children.forEach((voxel) => {
-    styleFn(voxel.material);
-  });
+  return style;
 }

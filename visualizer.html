@@ -4,21 +4,21 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Contribution Visualizer</title>
+        <link rel="icon" href="data:," />
         <script src="https://cdn.tailwindcss.com"></script>
         <script>
-            // Enable dark mode based on 'class'
             tailwind.config = {
                 darkMode: "class",
             };
         </script>
-        <!-- CHANGE A: Add Lucide icon library CDN -->
         <script src="https://unpkg.com/lucide@latest"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
         <script type="importmap">
             {
                 "imports": {
                     "three": "https://unpkg.com/three@0.157.0/build/three.module.js",
-                    "three/addons/": "https://unpkg.com/three@0.157.0/examples/jsm/"
+                    "three/addons/": "https://unpkg.com/three@0.157.0/examples/jsm/",
+                    "three/addons/geometries/RoundedBoxGeometry.js": "https://unpkg.com/three@0.157.0/examples/jsm/geometries/RoundedBoxGeometry.js"
                 }
             }
         </script>
@@ -45,7 +45,6 @@
                 pointer-events: none;
                 transition: opacity 0.2s;
             }
-            /* CHANGE A: Ensure Lucide icons inherit color and size correctly */
             i[data-lucide] {
                 vertical-align: middle;
             }
@@ -74,7 +73,6 @@
                         <div
                             class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2"
                         >
-                            <!-- CHANGE A: Use Lucide icon -->
                             <i
                                 data-lucide="chevron-down"
                                 class="h-5 w-5 text-gray-500"
@@ -83,8 +81,6 @@
                     </div>
                 </div>
 
-                <!-- CHANGE B: Update search button styles -->
-                <!-- CHANGE A: Use Lucide icons for search and loading states -->
                 <button
                     id="searchButton"
                     class="p-2.5 rounded-md text-slate-700 dark:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 transition-colors duration-200 disabled:text-slate-400 dark:disabled:text-slate-600 disabled:cursor-not-allowed"
@@ -109,11 +105,11 @@
                         >
                             <option value="clay">Clay</option>
                             <option value="jelly">Jelly</option>
+                            <option value="hologram">Hologram</option>
                         </select>
                         <div
                             class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2"
                         >
-                            <!-- CHANGE A: Use Lucide icon -->
                             <i
                                 data-lucide="chevron-down"
                                 class="h-5 w-5 text-gray-500"
@@ -130,7 +126,6 @@
                     id="settingsButton"
                     class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm p-2.5 rounded-lg shadow-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200/80 dark:hover:bg-slate-800/80 transition-colors"
                 >
-                    <!-- CHANGE A: Use Lucide icon -->
                     <i data-lucide="settings" class="h-6 w-6"></i>
                 </button>
                 <div
@@ -144,7 +139,6 @@
                         >
                             <span>Toggle Theme</span>
                             <div class="relative w-6 h-6">
-                                <!-- CHANGE A: Use Lucide icons -->
                                 <i
                                     id="sunIcon"
                                     data-lucide="sun"
@@ -194,11 +188,9 @@
             class="absolute hidden bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-900 text-sm rounded-md px-3 py-1.5 shadow-lg"
         ></div>
 
-        <!-- CHANGE A: Initialize Lucide icons -->
         <script>
             lucide.createIcons();
         </script>
-        <!-- The main logic is now in an external file -->
         <script type="module" src="./visualizer.js"></script>
     </body>
 </html>
