@@ -80,16 +80,18 @@ export function setTheme(theme, ui, lights, backgroundPlane) {
     document.documentElement.classList.add("dark");
     ui.sunIcon.classList.add("hidden");
     ui.moonIcon.classList.remove("hidden");
-    lights.hemisphereLight.intensity = 0.5;
-    lights.mainDirectionalLight.intensity = 0.4;
-    lights.fillDirectionalLight.intensity = 0.1;
+    // CHANGE: Increased dark mode light intensities
+    lights.ambientLight.intensity = 0.5; // Upped from 0.3
+    lights.spotLight1.intensity = 0.8; // Upped from 0.4
+    lights.spotLight2.intensity = 0.5; // Upped from 0.2
   } else {
     document.documentElement.classList.remove("dark");
     ui.sunIcon.classList.remove("hidden");
     ui.moonIcon.classList.add("hidden");
-    lights.hemisphereLight.intensity = 1.0;
-    lights.mainDirectionalLight.intensity = 0.8;
-    lights.fillDirectionalLight.intensity = 0.3;
+    // CHANGE: Increased light mode light intensities
+    lights.ambientLight.intensity = 0.8; // Upped from 0.6
+    lights.spotLight1.intensity = 1.2; // Upped from 0.7
+    lights.spotLight2.intensity = 0.9; // Upped from 0.5
   }
   updateBackgroundTheme(backgroundPlane, theme);
 }
@@ -114,4 +116,13 @@ export function updateTooltip(tooltip, text, x, y) {
  */
 export function hideTooltip(tooltip) {
   tooltip.classList.add("hidden");
+}
+
+/**
+ * Updates the enabled/disabled state of the theme toggle button.
+ * @param {boolean} enabled - Whether the button should be enabled.
+ * @param {object} ui - The UI elements object from getDOMElements.
+ */
+export function updateThemeToggleUI(enabled, ui) {
+  ui.themeToggleButton.disabled = !enabled;
 }

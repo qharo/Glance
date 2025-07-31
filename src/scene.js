@@ -1,12 +1,15 @@
 // src/scene.js
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { createBackgroundPlane } from "./backgrounds/index.js";
+import {
+  createBackgroundPlane,
+  updateBackgroundPlaneSize,
+} from "./backgrounds/index.js";
 import { getStyle } from "./styles/index.js";
 
 // Constants
 const DAYS = 7;
-const WEEKS = 53;
+// WEEKS constant is no longer authoritative for grid creation.
 
 // Scene objects
 let controls, raycaster, clock;
@@ -45,16 +48,35 @@ export function initScene(container) {
   raycaster = new THREE.Raycaster();
   clock = new THREE.Clock(); // For shader animations
 
-  const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
-  scene.add(hemisphereLight);
+  // CHANGE: Increased default light intensities for a brighter scene
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); // Upped from 0.6
+  scene.add(ambientLight);
 
-  const mainDirectionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  mainDirectionalLight.position.set(20, 30, 10);
-  scene.add(mainDirectionalLight);
+  const spotLight1 = new THREE.SpotLight(
+    0xffffff,
+    1.2, // Upped from 0.7
+    150,
+    Math.PI / 4,
+    0.5,
+    1,
+  );
+  spotLight1.position.set(30, 40, 20);
+  spotLight1.target.position.set(0, 0, 0);
+  scene.add(spotLight1);
+  scene.add(spotLight1.target);
 
-  const fillDirectionalLight = new THREE.DirectionalLight(0xffffff, 0.3);
-  fillDirectionalLight.position.set(-20, 15, -10);
-  scene.add(fillDirectionalLight);
+  const spotLight2 = new THREE.SpotLight(
+    0xffffff,
+    0.9, // Upped from 0.5
+    150,
+    Math.PI / 5,
+    0.3,
+    1,
+  );
+  spotLight2.position.set(-30, 30, -20);
+  spotLight2.target.position.set(0, 0, 0);
+  scene.add(spotLight2);
+  scene.add(spotLight2.target);
 
   const backgroundPlane = createBackgroundPlane();
   mainGroup.add(backgroundPlane);
@@ -66,7 +88,7 @@ export function initScene(container) {
     scene,
     camera,
     renderer,
-    lights: { hemisphereLight, mainDirectionalLight, fillDirectionalLight },
+    lights: { ambientLight, spotLight1, spotLight2 },
     backgroundPlane,
   };
 }
@@ -75,43 +97,47 @@ export function initScene(container) {
  * Creates the grid of voxels based on contribution data and a visual style.
  * @param {Array<object>} contributionData - The array of contribution objects.
  * @param {string} styleName - The name of the style to use.
+ * @param {THREE.Mesh} backgroundPlane - The background plane to resize.
  */
-export function createGrid(contributionData, styleName) {
+export function createGrid(contributionData, styleName, backgroundPlane) {
   voxelGroup.clear(); // Clear existing voxels
   const style = getStyle(styleName);
   const Spacing = 1.2;
   const MaxHeight = 8;
   const maxContributions = Math.max(1, ...contributionData.map((d) => d.count));
 
-  for (let week = 0; week < WEEKS; week++) {
-    for (let day = 0; day < DAYS; day++) {
-      const index = week * DAYS + day;
-      const contribution = contributionData[index];
-      if (!contribution) continue;
+  // The total number of weeks in the grid is the total number of days divided by 7, rounded up.
+  const totalWeeks = Math.ceil(contributionData.length / DAYS);
+  updateBackgroundPlaneSize(backgroundPlane, totalWeeks);
 
-      const normalizedCount = contribution.count / maxContributions;
-      const height =
-        contribution.count > 0 ? 0.1 + normalizedCount * MaxHeight : 0.05;
+  contributionData.forEach((contribution, index) => {
+    // Calculate week and day from the flat array index
+    const week = Math.floor(index / DAYS);
+    const day = index % DAYS;
 
-      const dataPayload = { ...contribution, normalizedCount };
+    const normalizedCount = contribution.count / maxContributions;
+    const height =
+      contribution.count > 0 ? 0.1 + normalizedCount * MaxHeight : 0.05;
 
-      const geometry = style.getGeometry(height, dataPayload);
-      geometry.translate(0, height / 2, 0);
+    const dataPayload = { ...contribution, normalizedCount };
 
-      const material = style.createMaterial(dataPayload);
-      const voxel = new THREE.Mesh(geometry, material);
+    const geometry = style.getGeometry(height, dataPayload);
+    geometry.translate(0, height / 2, 0);
 
-      const x = (week - (WEEKS - 1) / 2) * Spacing;
-      const z = (day - (DAYS - 1) / 2) * Spacing;
-      voxel.position.set(x, 0, z);
-      voxel.userData = {
-        ...dataPayload,
-        // Add a flag to identify voxels that need time updates for shaders
-        needsTimeUpdate: !!style.needsTimeUpdate,
-      };
-      voxelGroup.add(voxel);
-    }
-  }
+    const material = style.createMaterial(dataPayload);
+    const voxel = new THREE.Mesh(geometry, material);
+
+    // Center the grid by offsetting by half the total number of weeks/days
+    const x = (week - (totalWeeks - 1) / 2) * Spacing;
+    const z = (day - (DAYS - 1) / 2) * Spacing;
+    voxel.position.set(x, 0, z);
+    voxel.userData = {
+      ...dataPayload,
+      // Add a flag to identify voxels that need time updates for shaders
+      needsTimeUpdate: !!style.needsTimeUpdate,
+    };
+    voxelGroup.add(voxel);
+  });
 }
 
 /**

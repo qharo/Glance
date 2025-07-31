@@ -177,5 +177,7 @@ export const hologramStyle = {
     }
   },
 
+  forcedTheme: "dark",
+
   needsTimeUpdate: true,
 };

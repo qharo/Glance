@@ -5,31 +5,50 @@ const DAYS_IN_WEEK = 7;
 const TOTAL_DAYS = WEEKS * DAYS_IN_WEEK; // 371
 
 /**
- * Creates a 371-day data array for a specific calendar year to fit the 53x7 grid.
+ * Creates a data array for a specific calendar year to fit the grid.
  * The grid starts on the Sunday of the week containing January 1st of that year.
+ * For past years, it ends on December 31st. For the current year, it ends on
+ * the current date to avoid showing future days.
  * @param {Array<object>} yearContributions - Contributions for a single calendar year.
  * @param {string} year - The year (e.g., "2023").
- * @returns {Array<object>} A sanitized array with exactly TOTAL_DAYS entries.
+ * @returns {Array<object>} A sanitized array with entries from the grid start date to the correct end date.
  */
 export function padYearData(yearContributions, year) {
   const yearInt = parseInt(year, 10);
+
+  // To test with a specific date (like in your example), you can use the line below.
+  // const today = new Date("2025-08-01T12:00:00Z");
+  const today = new Date();
+
+  const currentYear = today.getFullYear();
+
   const janFirst = new Date(yearInt, 0, 1);
-  const dayOfWeek = janFirst.getDay(); // 0 = Sunday, 1 = Monday, etc.
+
+  // Determine the end date for the grid.
+  // If the selected year is the current year, end on today's date.
+  // Otherwise, for past years, end on December 31st.
+  let gridEndDate;
+  if (yearInt === currentYear) {
+    gridEndDate = today;
+  } else {
+    // For past years, show the full year.
+    gridEndDate = new Date(yearInt, 11, 31);
+  }
 
   // The grid starts on the Sunday of the week containing Jan 1st.
+  const dayOfWeek = janFirst.getDay(); // 0 = Sunday, 1 = Monday, etc.
   const gridStartDate = new Date(janFirst);
   gridStartDate.setDate(janFirst.getDate() - dayOfWeek);
 
   const dataMap = new Map(yearContributions.map((c) => [c.date, c.count]));
   const paddedData = [];
 
-  for (let i = 0; i < TOTAL_DAYS; i++) {
-    const currentDate = new Date(gridStartDate);
-    currentDate.setDate(gridStartDate.getDate() + i);
-
+  // Loop from the calculated grid start date until the grid end date.
+  let currentDate = new Date(gridStartDate);
+  while (currentDate <= gridEndDate) {
     const dateString = currentDate.toISOString().split("T")[0];
-    // Only include contributions from the target year.
-    // Days on the grid outside the calendar year will have 0 contributions.
+
+    // Days on the grid that fall before the start of the year have 0 contributions.
     const count =
       currentDate.getFullYear() === yearInt ? dataMap.get(dateString) || 0 : 0;
 
@@ -37,6 +56,9 @@ export function padYearData(yearContributions, year) {
       date: dateString,
       count: count,
     });
+
+    // Move to the next day
+    currentDate.setDate(currentDate.getDate() + 1);
   }
 
   return paddedData;
@@ -89,12 +111,12 @@ export async function fetchContributions(username) {
 export function generateFakeData() {
   const data = [];
   const today = new Date();
-  const startDate = new Date();
+  const startDate = new Date(); // CORRECTED: Use 'new Date()'
   // Go back the total number of days minus one to get the start date
   startDate.setDate(today.getDate() - (TOTAL_DAYS - 1));
 
   for (let i = 0; i < TOTAL_DAYS; i++) {
-    const currentDate = new Date(startDate);
+    const currentDate = new Date(startDate); // CORRECTED: Create a copy of the start date
     currentDate.setDate(startDate.getDate() + i);
     data.push({
       date: currentDate.toISOString().split("T")[0],

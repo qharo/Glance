@@ -88,4 +88,6 @@ export const jellyStyle = {
       duration: 0.3,
     });
   },
+
+  forcedTheme: "light",
 };

@@ -23,6 +23,24 @@ export function createBackgroundPlane() {
 }
 
 /**
+ * Resizes the background plane to fit the grid.
+ * @param {THREE.Mesh} plane - The plane to update.
+ * @param {number} totalWeeks - The total number of weeks to display.
+ */
+export function updateBackgroundPlaneSize(plane, totalWeeks) {
+  if (!plane) return;
+
+  const Spacing = 1.2; // Should match spacing in createGrid
+  const Padding = 4;
+  const width = totalWeeks * Spacing + Padding;
+  const height = DAYS * Spacing + Padding;
+
+  // Create new geometry and dispose of the old one to avoid distortion
+  plane.geometry.dispose();
+  plane.geometry = new THREE.PlaneGeometry(width, height);
+}
+
+/**
  * Updates the background plane's color based on the selected theme.
  * @param {THREE.Mesh} plane - The plane to update.
  * @param {string} theme - The theme ('light' or 'dark').
