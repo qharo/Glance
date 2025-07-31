@@ -49,6 +49,31 @@
                 vertical-align: middle;
             }
         </style>
+        <!-- CHANGE: Added this style block to override browser autofill styles -->
+        <style>
+            /* --- Override Browser Autofill Styles --- */
+            /* This targets the username input when autofilled by the browser (e.g., Chrome's yellow background) */
+            input:-webkit-autofill,
+            input:-webkit-autofill:hover,
+            input:-webkit-autofill:focus,
+            input:-webkit-autofill:active {
+                /* The box-shadow trick is used to cover the browser's default background color. */
+                -webkit-box-shadow: 0 0 0 30px white inset !important;
+                /* We also need to set the text color to match our design. */
+                -webkit-text-fill-color: #334155 !important; /* Corresponds to text-slate-700 */
+                transition: background-color 5000s ease-in-out 0s; /* Another trick to delay the style change */
+            }
+
+            .dark input:-webkit-autofill,
+            .dark input:-webkit-autofill:hover,
+            .dark input:-webkit-autofill:focus,
+            .dark input:-webkit-autofill:active {
+                /* Use the dark mode background color for the box-shadow. */
+                -webkit-box-shadow: 0 0 0 30px #0f172a inset !important; /* Corresponds to dark:bg-slate-900 */
+                /* Set the text color for dark mode. */
+                -webkit-text-fill-color: #e2e8f0 !important; /* Corresponds to dark:text-slate-200 */
+            }
+        </style>
     </head>
     <body>
         <!-- UI Overlays -->
